@@ -24,12 +24,43 @@ import sys
 print(sys.executable)
 ```
 
+Deactivate the virtual environment
+```bash
+deactivate
+```
+
+### Jupyter Notebook
+
+Install jupyter and ipykernel
+```bash
+pip install jupyter ipykernel
+```
+
+If you have a `.venv` directory not in the root of your project, but in a subdirectory, you can got to that directory and run the following command to install the kernel:
+```bash
+cd path/to/your/subdirectory
+python -m ipykernel install --user --name=.venv
+```
+
+To list all available kernels
+```bash
+jupyter kernelspec list
+```
+
+
+The launch the jupyter notebook
+```bash
+jupyter notebook
+```
+
+Check the notebook server URL
+```bash
+jupyter notebook list
+```
+
+### Install requirements
 Install requirements
 ```bash
 pip install -r requirements.txt
 ```
 
-Deactivate the virtual environment
-```bash
-deactivate
-```
