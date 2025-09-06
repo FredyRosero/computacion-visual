@@ -1,0 +1,14 @@
+# Ignore python virtual environment directories and jupyter files
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.ipynb_checkpoints
+venv/
+.venv/
+.env/
+.cache/
+.mypy_cache/
+.pytest_cache/
+
