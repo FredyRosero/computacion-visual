@@ -1,7 +1,6 @@
 
-# 
+# README
 
-Entorno virtual `.venv`
 ~~~bash
 python -m venv .venv
 ~~~
