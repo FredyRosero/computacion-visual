@@ -1,0 +1,6 @@
+ipywidgets
+ipython
+jupyter
+opencv-python
+numpy
+glob2
