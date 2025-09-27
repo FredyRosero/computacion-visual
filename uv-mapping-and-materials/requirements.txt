@@ -1,0 +1,9 @@
+jupyter
+ipywidgets
+ipython
+numpy
+matplotlib
+scipy
+trimesh
+pillow
+pythreejs
