@@ -8,13 +8,25 @@ En este punto utilizo OpenCV con la imagen del un Manatí (un animal en peligro 
 
 ### 2. **Punto 2 – Three.js:**
 
-   * Breve descripción de la escena de formas básicas y de la interacción.
-   * GIFs incrustados mostrando la escena, las animaciones y los controles.
+Para es punto se utilizó Three.js para renderizar 4 objetos 3: un cono, un cubo, un toroide y una caja con textura de caja. Se renderiza también un piso con una textura de tablaro de ajedre vieja y se configura para alternar entre camara ortogonal y perspectiva.
+
+![punto2](threejs/gifs/punto2.gif)
 
 ### 3. **Instrucciones de ejecución:**
 
-   * Cómo abrir y ejecutar el notebook de Python.
-   * Cómo correr el proyecto de Three.js (comandos, servidor local, etc.).
+#### Python
+Ejecute las siguientes dependencias para correr el notebook de Python:
 
+```bash
+sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+pip install opencv-python matplotlib numpy imageio
+```
+
+Luego abra y ejecute el notebook `examen_final/python/examen_final_python.ipynb` utilizando Jupyter Notebook o Jupyter Lab.
+
+
+#### Three.js
+
+Abra el
 
 
