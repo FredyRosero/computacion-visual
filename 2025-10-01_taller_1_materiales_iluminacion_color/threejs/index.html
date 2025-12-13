@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Materiales, iluminación y color - Three.js</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/DRACOLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/RGBELoader.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --c-bg: #0f1320;
+      --c-panel: rgba(18, 22, 34, 0.8);
+      --c-accent: #ff9f59;
+      --c-primary: #7ad8ff;
+      --c-muted: #9fb1c7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at 20% 20%, #15213a 0%, #0f1320 40%, #0a0d16 100%);
+      color: white;
+      font-family: "Space Grotesk", "Fira Sans", system-ui, -apple-system, sans-serif;
+    }
+    canvas { display: block; }
+    #ui {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      gap: 10px;
+      z-index: 2;
+      padding: 10px 12px;
+      background: var(--c-panel);
+      border: 1px solid rgba(122, 216, 255, 0.2);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(6px);
+    }
+    #legend {
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      z-index: 2;
+      padding: 12px;
+      background: var(--c-panel);
+      border: 1px solid rgba(255, 159, 89, 0.2);
+      border-radius: 12px;
+      max-width: 420px;
+      line-height: 1.4;
+      color: var(--c-muted);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(6px);
+    }
+    button {
+      background: linear-gradient(120deg, var(--c-primary), #5b7cff);
+      color: #0b0f1a;
+      font-weight: 600;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button.secondary {
+      background: linear-gradient(120deg, var(--c-accent), #ff6f61);
+      color: #1a0f0a;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0,0,0,0.25); }
+    #ui small { color: var(--c-muted); display: block; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div>
+      <button id="cameraBtn">Cámara: Perspectiva</button>
+      <small>Alterna entre perspectiva y ortográfica</small>
+    </div>
+    <div>
+      <button class="secondary" id="lightBtn">Luz: Día</button>
+      <small>Presets: día / atardecer</small>
+    </div>
+    <div>
+      <button id="camAnimBtn">Recorrido cámara: ON</button>
+      <small>Cámara sigue una órbita suave</small>
+    </div>
+  </div>
+  <div id="legend">
+    Paleta RGB/HSV: base azul cian (#7ad8ff), acento cálido (#ff9f59) y sombras violeta profundo (#0f1320).
+    Contraste perceptual: fondo oscuro + acentos cálidos/fríos separados para materiales metal/cerámico.
+    Shaders procedurales: damero (celda 8) + ruido granular (escala 4) mezclados con PBR.
+  </div>
+  <script>
+    // Escena y renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1320);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    const clock = new THREE.Clock();
+
+    // Paleta base
+    const palette = {
+      primary: new THREE.Color("#7ad8ff"),
+      accent: new THREE.Color("#ff9f59"),
+      shadow: new THREE.Color("#0f1320"),
+      cool: new THREE.Color("#5b7cff")
+    };
+
+    // Cámaras
+    const cameraPersp = new THREE.PerspectiveCamera(
+      60,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      80
+    );
+    cameraPersp.position.set(10, 6, 12);
+
+    const frustumSize = 16;
+    function updateOrthoFrustum(cam) {
+      const aspect = window.innerWidth / window.innerHeight;
+      cam.left = (-frustumSize * aspect) / 2;
+      cam.right = (frustumSize * aspect) / 2;
+      cam.top = frustumSize / 2;
+      cam.bottom = -frustumSize / 2;
+      cam.near = 0.1;
+      cam.far = 100;
+      cam.updateProjectionMatrix();
+    }
+    function createOrthoCamera() {
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+      updateOrthoFrustum(cam);
+      cam.position.set(10, 8, 10);
+      cam.lookAt(0, 2, 0);
+      return cam;
+    }
+    const cameraOrtho = createOrthoCamera();
+    let activeCamera = cameraPersp;
+    let autoCamera = true;
+
+    const controls = new THREE.OrbitControls(activeCamera, renderer.domElement);
+    controls.target.set(0, 2, 0);
+    controls.enableDamping = true;
+    controls.enabled = !autoCamera;
+
+    // HDRI suave para reflejos
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const rgbeLoader = new THREE.RGBELoader();
+    rgbeLoader.setDataType(THREE.UnsignedByteType);
+    rgbeLoader.load("https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_08_1k.hdr", (texture) => {
+      const envMap = pmrem.fromEquirectangular(texture).texture;
+      scene.environment = envMap;
+      texture.dispose();
+    });
+
+    // Luces
+    const ambient = new THREE.AmbientLight(0x202433, 0.55);
+    scene.add(ambient);
+    const hemi = new THREE.HemisphereLight(0x9fd1ff, 0x1c1c24, 0.5);
+    scene.add(hemi);
+
+    function createDirLight(color, intensity) {
+      const light = new THREE.DirectionalLight(color, intensity);
+      light.castShadow = true;
+      light.shadow.mapSize.set(2048, 2048);
+      light.shadow.bias = -0.0004;
+      light.shadow.camera.near = 1;
+      light.shadow.camera.far = 40;
+      return light;
+    }
+    const keyLight = createDirLight(0xfff2d7, 2.2);
+    keyLight.position.set(6, 8, 6);
+    keyLight.target.position.set(0, 2, 0);
+    scene.add(keyLight, keyLight.target);
+
+    const fillLight = createDirLight(0xaed7ff, 1.1);
+    fillLight.position.set(-6, 5, -4);
+    fillLight.target.position.set(0, 1.5, 0);
+    scene.add(fillLight, fillLight.target);
+
+    const rimLight = createDirLight(0xff77cc, 1.4);
+    rimLight.position.set(-4, 6, 6);
+    rimLight.target.position.set(0, 2, 0);
+    scene.add(rimLight, rimLight.target);
+
+    const lightPresets = {
+      dia: {
+        key: { color: 0xfff2d7, intensity: 2.4, pos: [7, 9, 6] },
+        fill: { color: 0x9cd8ff, intensity: 1.1, pos: [-7, 5, -5] },
+        rim: { color: 0xffffff, intensity: 1.3, pos: [-5, 6, 6] },
+        ambient: { color: 0x1f2b40, intensity: 0.55 },
+        hemi: { sky: 0xb7d6ff, ground: 0x1c1c24, intensity: 0.55 }
+      },
+      atardecer: {
+        key: { color: 0xffb38a, intensity: 1.5, pos: [4, 6, 3] },
+        fill: { color: 0x6fa1ff, intensity: 0.7, pos: [-6, 3, -3] },
+        rim: { color: 0xff66cc, intensity: 1.2, pos: [-3, 5, 5] },
+        ambient: { color: 0x2a1f33, intensity: 0.65 },
+        hemi: { sky: 0xffcba4, ground: 0x111019, intensity: 0.5 }
+      }
+    };
+    let currentPreset = "dia";
+    function applyLightPreset(name) {
+      currentPreset = name;
+      const preset = lightPresets[name];
+      keyLight.color.setHex(preset.key.color);
+      keyLight.intensity = preset.key.intensity;
+      keyLight.position.fromArray(preset.key.pos);
+      fillLight.color.setHex(preset.fill.color);
+      fillLight.intensity = preset.fill.intensity;
+      fillLight.position.fromArray(preset.fill.pos);
+      rimLight.color.setHex(preset.rim.color);
+      rimLight.intensity = preset.rim.intensity;
+      rimLight.position.fromArray(preset.rim.pos);
+      ambient.color.setHex(preset.ambient.color);
+      ambient.intensity = preset.ambient.intensity;
+      hemi.color.setHex(preset.hemi.sky);
+      hemi.groundColor.setHex(preset.hemi.ground);
+      hemi.intensity = preset.hemi.intensity;
+    }
+    applyLightPreset("dia");
+
+    // Texturas PBR
+    const textureLoader = new THREE.TextureLoader();
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    function loadTexture(url, repeat, encoding = THREE.sRGBEncoding) {
+      const tex = textureLoader.load(url);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.encoding = encoding;
+      tex.anisotropy = maxAniso;
+      if (repeat) tex.repeat.set(repeat, repeat);
+      return tex;
+    }
+    const floorMap = loadTexture("../textures/floor.jpg", 6);
+    const floorNormal = loadTexture(
+      "https://threejs.org/examples/textures/water/Water_1_M_Normal.jpg",
+      4,
+      THREE.LinearEncoding
+    );
+    const boxMap = loadTexture("../textures/box.jpg", 1);
+
+    // Texturas procedurales simples (damero y ruido granular)
+    function createCheckerTexture(cells = 8, c1 = "#0f1628", c2 = "#7ad8ff") {
+      const size = 512;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      const cellSize = size / cells;
+      for (let y = 0; y < cells; y++) {
+        for (let x = 0; x < cells; x++) {
+          ctx.fillStyle = (x + y) % 2 === 0 ? c1 : c2;
+          ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
+        }
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = maxAniso;
+      tex.needsUpdate = true;
+      return tex;
+    }
+    function createNoiseTexture(size = 256, scale = 4, tint = { r: 1, g: 0.6, b: 0.4 }) {
+      const data = new Uint8Array(size * size * 3);
+      for (let i = 0; i < size * size; i++) {
+        const v = Math.pow(Math.random(), 1.4) * 255;
+        data[i * 3] = v * tint.r;
+        data[i * 3 + 1] = v * tint.g;
+        data[i * 3 + 2] = v * tint.b;
+      }
+      const tex = new THREE.DataTexture(data, size, size, THREE.RGBFormat);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(scale, scale);
+      tex.needsUpdate = true;
+      return tex;
+    }
+    const checkerTex = createCheckerTexture(8, "#0f1628", "#7ad8ff");
+    const noiseTex = createNoiseTexture(256, 4, { r: 1, g: 0.6, b: 0.45 });
+
+    // Suelo y plataformas
+    const stage = new THREE.Group();
+    scene.add(stage);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(60, 60),
+      new THREE.MeshStandardMaterial({
+        map: floorMap,
+        normalMap: floorNormal,
+        roughness: 0.8,
+        metalness: 0.05,
+        color: palette.shadow.clone().lerp(palette.primary, 0.05)
+      })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    stage.add(floor);
+
+    const podium = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.5, 4, 0.6, 64),
+      new THREE.MeshStandardMaterial({
+        map: boxMap,
+        normalMap: floorNormal,
+        roughness: 0.35,
+        metalness: 0.5,
+        color: palette.shadow.clone().lerp(palette.accent, 0.1),
+        emissive: palette.accent.clone().multiplyScalar(0.05)
+      })
+    );
+    podium.position.set(0, 0.3, 0);
+    podium.receiveShadow = true;
+    podium.castShadow = true;
+    stage.add(podium);
+
+    const leftPad = new THREE.Mesh(
+      new THREE.BoxGeometry(4.5, 0.4, 4.5),
+      new THREE.MeshStandardMaterial({
+        color: palette.shadow.clone().lerp(palette.cool, 0.08),
+        roughness: 0.5,
+        metalness: 0.35
+      })
+    );
+    leftPad.position.set(-6, 0.2, -3);
+    leftPad.castShadow = true;
+    leftPad.receiveShadow = true;
+    stage.add(leftPad);
+
+    const rightPad = leftPad.clone();
+    rightPad.position.set(6, 0.2, 3);
+    rightPad.material = leftPad.material.clone();
+    rightPad.material.color = palette.shadow.clone().lerp(palette.accent, 0.12);
+    stage.add(rightPad);
+
+    // Objetos con materiales procedurales
+    const checkerSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1.25, 64, 64),
+      new THREE.MeshStandardMaterial({
+        map: checkerTex,
+        normalMap: floorNormal,
+        roughness: 0.32,
+        metalness: 0.2,
+        emissive: palette.cool.clone().multiplyScalar(0.1)
+      })
+    );
+    checkerSphere.position.set(-6, 1.4, -3);
+    checkerSphere.castShadow = true;
+    checkerSphere.receiveShadow = true;
+    stage.add(checkerSphere);
+
+    const noiseTorus = new THREE.Mesh(
+      new THREE.TorusKnotGeometry(1.2, 0.35, 180, 16),
+      new THREE.MeshStandardMaterial({
+        map: noiseTex,
+        roughness: 0.25,
+        metalness: 0.65,
+        normalMap: floorNormal,
+        emissive: palette.accent.clone().multiplyScalar(0.15),
+        emissiveIntensity: 0.6
+      })
+    );
+    noiseTorus.position.set(6, 1.6, 3);
+    noiseTorus.castShadow = true;
+    noiseTorus.receiveShadow = true;
+    stage.add(noiseTorus);
+
+    // Aro luminoso para resaltar materiales
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(2.7, 0.08, 16, 120),
+      new THREE.MeshStandardMaterial({
+        color: palette.primary,
+        emissive: palette.primary.clone().multiplyScalar(0.7),
+        emissiveIntensity: 1.2,
+        roughness: 0.1,
+        metalness: 0.9
+      })
+    );
+    halo.position.set(0, 1.6, 0);
+    halo.rotation.x = Math.PI / 2;
+    halo.castShadow = true;
+    stage.add(halo);
+
+    // Carga de modelos GLB
+    const dracoLoader = new THREE.DRACOLoader();
+    dracoLoader.setDecoderPath("https://www.gstatic.com/draco/v1/decoders/");
+    const gltfLoader = new THREE.GLTFLoader();
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    const models = [
+      {
+        name: "Littlest Tokyo (arquitectónico)",
+        url: "../glb_models/LittlestTokyo.glb",
+        position: new THREE.Vector3(-6, 0, -3),
+        rotation: new THREE.Euler(0, Math.PI / 6, 0),
+        scale: 0.015
+      },
+      {
+        name: "Damaged Helmet (utilitario)",
+        url: "../glb_models/DamagedHelmet.glb",
+        position: new THREE.Vector3(5.8, 1.2, -0.5),
+        rotation: new THREE.Euler(0, -Math.PI / 3, 0),
+        scale: 1.75
+      },
+      {
+        name: "Avocado (orgánico)",
+        url: "../glb_models/Avocado.glb",
+        position: new THREE.Vector3(0, 1.3, 4.8),
+        rotation: new THREE.Euler(0, Math.PI / 4, 0),
+        scale: 22
+      }
+    ];
+
+    models.forEach((cfg) => {
+      gltfLoader.load(
+        cfg.url,
+        (gltf) => {
+          const root = gltf.scene;
+          root.position.copy(cfg.position);
+          root.rotation.copy(cfg.rotation);
+          root.scale.setScalar(cfg.scale);
+          root.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              if (child.material && child.material.map) {
+                child.material.map.encoding = THREE.sRGBEncoding;
+              }
+            }
+          });
+          scene.add(root);
+        },
+        undefined,
+        (err) => console.error("Error cargando", cfg.name, err)
+      );
+    });
+
+    // UI / toggles
+    const cameraBtn = document.getElementById("cameraBtn");
+    const lightBtn = document.getElementById("lightBtn");
+    const camAnimBtn = document.getElementById("camAnimBtn");
+
+    cameraBtn.addEventListener("click", () => {
+      const previous = activeCamera;
+      activeCamera = activeCamera === cameraPersp ? cameraOrtho : cameraPersp;
+      activeCamera.position.copy(previous.position);
+      activeCamera.quaternion.copy(previous.quaternion);
+      if (activeCamera === cameraOrtho) {
+        updateOrthoFrustum(cameraOrtho);
+        cameraBtn.textContent = "Cámara: Ortográfica";
+      } else {
+        cameraBtn.textContent = "Cámara: Perspectiva";
+      }
+      controls.object = activeCamera;
+      controls.update();
+    });
+
+    lightBtn.addEventListener("click", () => {
+      const nextPreset = currentPreset === "dia" ? "atardecer" : "dia";
+      applyLightPreset(nextPreset);
+      lightBtn.textContent = `Luz: ${nextPreset === "dia" ? "Día" : "Atardecer"}`;
+    });
+
+    camAnimBtn.addEventListener("click", () => {
+      autoCamera = !autoCamera;
+      controls.enabled = !autoCamera;
+      camAnimBtn.textContent = `Recorrido cámara: ${autoCamera ? "ON" : "OFF"}`;
+    });
+
+    // Animación
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const elapsed = clock.elapsedTime;
+
+      // Recorrido de cámara
+      if (autoCamera) {
+        const radius = 14;
+        const angle = elapsed * 0.25;
+        const height = 4.8 + Math.sin(elapsed * 0.6) * 1.4;
+        const targetPosition = new THREE.Vector3(
+          Math.cos(angle) * radius,
+          height,
+          Math.sin(angle) * radius
+        );
+        activeCamera.position.lerp(targetPosition, 0.04);
+        activeCamera.lookAt(0, 2, 0);
+      } else {
+        controls.update();
+      }
+
+      // Movimiento de luz rim
+      rimLight.position.x = Math.cos(elapsed * 0.8) * 6;
+      rimLight.position.z = Math.sin(elapsed * 0.8) * 6;
+      rimLight.position.y = 4 + Math.sin(elapsed * 0.5);
+
+      // Animación de objetos
+      checkerSphere.rotation.y += 0.35 * delta;
+      noiseTorus.rotation.x += 0.18 * delta;
+      noiseTorus.rotation.y -= 0.25 * delta;
+      halo.rotation.z += 0.1 * delta;
+
+      renderer.render(scene, activeCamera);
+    }
+
+    function onResize() {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      cameraPersp.aspect = window.innerWidth / window.innerHeight;
+      cameraPersp.updateProjectionMatrix();
+      updateOrthoFrustum(cameraOrtho);
+      controls.update();
+    }
+    window.addEventListener("resize", onResize);
+    animate();
+  </script>
+</body>
+</html>
